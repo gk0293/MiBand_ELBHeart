@@ -6,7 +6,10 @@ using Resource = Microsoft.Maui.Resource;
 
 namespace Heart.Platforms.Android.Services;
 
-[AApp.Service(Exported = false)]
+[AApp.Service(
+    Exported = false,
+    ForegroundServiceType =
+        global::Android.Content.PM.ForegroundService.TypeConnectedDevice)]
 public sealed class HeartMonitoringForegroundService : AApp.Service
 {
     private const string ChannelId = "heart_monitor_channel";
@@ -32,8 +35,23 @@ public sealed class HeartMonitoringForegroundService : AApp.Service
         var text = intent?.GetStringExtra(ExtraText) ?? "Waiting for heart-rate data";
 
         CreateNotificationChannel();
-        StartForeground(NotificationId, BuildNotification(title, text));
-        NotificationManagerCompat.From(this).Notify(NotificationId, BuildNotification(title, text));
+        var notification = BuildNotification(title, text);
+
+        // Android 10 (API 29)+ 要求 StartForeground 传入 foregroundServiceType
+        // Android 14 (API 34)+ 在 targetSdk=34 时强制执行，否则抛出 MissingForegroundServiceTypeException
+        if (AOS.Build.VERSION.SdkInt >= AOS.BuildVersionCodes.Q)
+        {
+            StartForeground(
+      NotificationId,
+      notification,
+      global::Android.Content.PM.ForegroundService.TypeConnectedDevice);
+        }
+        else
+        {
+            StartForeground(NotificationId, notification);
+        }
+
+        NotificationManagerCompat.From(this).Notify(NotificationId, notification);
         return AApp.StartCommandResult.Sticky;
     }
 
