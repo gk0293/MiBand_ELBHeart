@@ -1,0 +1,258 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+              x:Class="Heart.MainPage"
+              Title="心率监测">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="24"
+            Spacing="20">
+            <VerticalStackLayout Spacing="6">
+                <Label
+                    Text="心率监测"
+                    FontAttributes="Bold"
+                    FontSize="32"
+                    SemanticProperties.HeadingLevel="Level1" />
+                <Label
+                    Text="已支持自动重连、记住上次设备、后台持续监测与悬浮窗控制。"
+                    FontSize="15"
+                    Opacity="0.75" />
+            </VerticalStackLayout>
+
+            <Border
+                BackgroundColor="#7C3AED"
+                Padding="24"
+                StrokeThickness="0">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="24" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="8">
+                    <Label
+                        Text="当前心率"
+                        FontSize="16"
+                        TextColor="White" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Label
+                            x:Name="HeartRateValueLabel"
+                            FontAttributes="Bold"
+                            FontSize="48"
+                            Text="--"
+                            TextColor="White" />
+                        <Label
+                            Text="bpm"
+                            VerticalOptions="End"
+                            FontSize="18"
+                            Margin="0,0,0,8"
+                            TextColor="#E9D5FF" />
+                    </HorizontalStackLayout>
+                    <Label
+                        x:Name="HeartRateUpdatedLabel"
+                        FontSize="13"
+                        Text="等待更新"
+                        TextColor="#E9D5FF" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                Padding="20"
+                Stroke="#E5E7EB"
+                StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="20" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="16">
+                    <Label
+                        Text="运行状态"
+                        FontAttributes="Bold"
+                        FontSize="18" />
+
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+                        <Label Text="蓝牙设备" Grid.Row="0" Grid.Column="0" />
+                        <Label x:Name="BluetoothDeviceLabel" Text="未连接" Grid.Row="0" Grid.Column="1" TextColor="#DC2626" />
+
+                        <Label Text="连接状态" Grid.Row="1" Grid.Column="0" />
+                        <Label x:Name="ConnectionStatusLabel" Text="未连接" Grid.Row="1" Grid.Column="1" TextColor="#DC2626" />
+
+                        <Label Text="上次设备" Grid.Row="2" Grid.Column="0" />
+                        <Label x:Name="RememberedDeviceLabel" Text="暂无" Grid.Row="2" Grid.Column="1" />
+
+                        <Label Text="后台监测" Grid.Row="3" Grid.Column="0" />
+                        <Label x:Name="BackgroundMonitoringLabel" Text="未运行" Grid.Row="3" Grid.Column="1" TextColor="#DC2626" />
+
+                        <Label Text="悬浮窗" Grid.Row="4" Grid.Column="0" />
+                        <Label x:Name="OverlayStatusLabel" Text="未开启" Grid.Row="4" Grid.Column="1" TextColor="#DC2626" />
+
+                        <Label Text="蓝牙权限" Grid.Row="5" Grid.Column="0" />
+                        <Label x:Name="BluetoothPermissionLabel" Text="待检查" Grid.Row="5" Grid.Column="1" />
+
+                        <Label Text="悬浮权限" Grid.Row="6" Grid.Column="0" />
+                        <Label x:Name="OverlayPermissionLabel" Text="待检查" Grid.Row="6" Grid.Column="1" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <VerticalStackLayout Spacing="12">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" VerticalOptions="Center">
+                    <ActivityIndicator x:Name="ScanningIndicator" IsRunning="False" IsVisible="False" Color="#7C3AED" />
+                    <Label x:Name="ScanHintLabel" Grid.Column="1" Text="点击扫描可重新发现附近 BLE 设备，连接后再校验是否支持标准心率服务。" Opacity="0.75" VerticalOptions="Center" />
+                </Grid>
+
+                <Button
+                    Text="扫描蓝牙设备"
+                    Clicked="OnScanDevicesClicked"
+                    HorizontalOptions="Fill" />
+
+                <Button
+                    x:Name="ReconnectRememberedButton"
+                    Text="连接上次设备"
+                    Clicked="OnReconnectRememberedClicked"
+                    HorizontalOptions="Fill"
+                    IsEnabled="False" />
+
+                <Button
+                    x:Name="ConnectDeviceButton"
+                    Text="连接选中设备"
+                    Clicked="OnConnectDeviceClicked"
+                    HorizontalOptions="Fill"
+                    IsEnabled="False" />
+
+                <Button
+                    x:Name="DisconnectDeviceButton"
+                    Text="断开当前设备"
+                    Clicked="OnDisconnectDeviceClicked"
+                    HorizontalOptions="Fill"
+                    IsEnabled="False" />
+
+                <Button
+                    x:Name="ShowOverlayButton"
+                    Text="开启悬浮窗"
+                    Clicked="OnShowOverlayClicked"
+                    HorizontalOptions="Fill" />
+
+                <Button
+                    x:Name="HideOverlayButton"
+                    Text="关闭悬浮窗"
+                    Clicked="OnHideOverlayClicked"
+                    HorizontalOptions="Fill"
+                    IsEnabled="False" />
+            </VerticalStackLayout>
+
+            <Border
+                Padding="16"
+                Stroke="#E5E7EB"
+                StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="16" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="12">
+                    <Label
+                        Text="可连接设备"
+                        FontAttributes="Bold"
+                        FontSize="18" />
+
+                    <CollectionView
+                        x:Name="DevicesCollectionView"
+                        SelectionMode="Single"
+                        SelectionChanged="OnDeviceSelectionChanged"
+                        HeightRequest="240">
+                        <CollectionView.EmptyView>
+                            <Label
+                                Text="暂无设备，请先点击上方“扫描蓝牙设备”。"
+                                Opacity="0.7" />
+                        </CollectionView.EmptyView>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Margin="0,0,0,10"
+                                    Padding="14"
+                                    BackgroundColor="#FFFFFF"
+                                    Stroke="#DDD6FE"
+                                    StrokeThickness="1">
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="Selected">
+                                                <VisualState.Setters>
+                                                     <!--选中时的背景与描边颜色，按需调整--> 
+                                                    <Setter Property="BackgroundColor" Value="#FFF7ED" />
+                                                    <Setter Property="Stroke" Value="#F59E0B" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateManager.VisualStateGroups>
+
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="14" />
+                                    </Border.StrokeShape>
+                                    <VerticalStackLayout Spacing="10">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                            <VerticalStackLayout Spacing="4">
+                                                <Label Text="{Binding Name}" FontAttributes="Bold" FontSize="16" />
+                                                <Label Text="{Binding Address}" FontSize="12" Opacity="0.7" />
+                                            </VerticalStackLayout>
+                                            <Border Grid.Column="1" Padding="10,4" BackgroundColor="#EDE9FE" StrokeThickness="0" VerticalOptions="Start">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="999" />
+                                                </Border.StrokeShape>
+                                                <Label Text="{Binding Rssi, StringFormat='RSSI {0}'}" FontSize="11" TextColor="#6D28D9" />
+                                            </Border>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                            <Border Padding="10,4" BackgroundColor="#DCFCE7" StrokeThickness="0">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="999" />
+                                                </Border.StrokeShape>
+                                                <Label Text="{Binding IsConnected, StringFormat='已连接: {0}'}" FontSize="11" TextColor="#166534" />
+                                            </Border>
+                                            <Label Grid.Column="1" Text="{Binding HasHeartRateService, StringFormat='标准心率服务广播: {0}'}" FontSize="11" Opacity="0.6" VerticalOptions="Center" />
+                                        </Grid>
+
+                                        <Label Text="{Binding AdvertisedServices, StringFormat='广播 UUID: {0}'}" FontSize="11" Opacity="0.55" LineBreakMode="TailTruncation" MaxLines="2" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                Padding="16"
+                Stroke="#E5E7EB"
+                StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="16" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="12">
+                    <Label
+                        Text="扫描调试日志"
+                        FontAttributes="Bold"
+                        FontSize="18" />
+
+                    <Editor
+                        x:Name="ScanLogEditor"
+                        HeightRequest="180"
+                        IsReadOnly="True"
+                        AutoSize="TextChanges"
+                        Placeholder="扫描后会在这里显示每个设备的名称、地址、RSSI 和广播 UUID。" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                Padding="16"
+                BackgroundColor="#F3F4F6"
+                StrokeThickness="0">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="16" />
+                </Border.StrokeShape>
+                <Label
+                    FontSize="14"
+                    Opacity="0.8"
+                    Text="提示：已接入蓝牙扫描、连接和标准心率特征读取。请先开启系统蓝牙，再扫描并连接心率设备。" />
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

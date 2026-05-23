@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
+
+	<!-- BLE 硬件特性声明：缺少此项部分设备 BLE 扫描无法正常工作 -->
+	<uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+	<uses-feature android:name="android.hardware.bluetooth" android:required="true" />
+
+	<!-- Android 11 及以下传统蓝牙权限 -->
+	<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+	<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
+	<!-- Android 11 及以下：BLE 扫描强制需要位置权限 -->
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+	<!-- Android 12+ (API 31+) 精细化蓝牙权限 -->
+	<!-- neverForLocation: 声明本应用不通过 BLE 推断位置，可绕过对系统定位服务的依赖 -->
+	<uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+		android:usesPermissionFlags="neverForLocation"
+		tools:targetApi="s"
+		xmlns:tools="http://schemas.android.com/tools" />
+	<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+</manifest>
