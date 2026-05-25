@@ -147,43 +147,29 @@
                         TextChanged="OnBlynkConfigChanged"
                         ClearButtonVisibility="WhileEditing" />
 
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="上传链接" FontAttributes="Bold" FontSize="14" />
-                        <Label
-                            x:Name="BlynkUpdateUrlLabel"
-                            FontSize="12"
-                            LineBreakMode="WordWrap"
-                            Opacity="0.75"
-                            Text="请先输入 Token 和 Datastream。" />
-                    </VerticalStackLayout>
+                    <!-- 链接预览与操作见下方左右列 -->
 
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="获取链接" FontAttributes="Bold" FontSize="14" />
-                        <Label
-                            x:Name="BlynkGetUrlLabel"
-                            FontSize="12"
-                            LineBreakMode="WordWrap"
-                            Opacity="0.75"
-                            Text="请先输入 Token 和 Datastream。" />
-                    </VerticalStackLayout>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <!-- Upload column -->
+                        <Border Padding="12" Stroke="#E5E7EB" StrokeThickness="1">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="传输（上传）" FontAttributes="Bold" />
+                                <Label x:Name="BlynkUpdateUrlLabel" FontSize="12" LineBreakMode="WordWrap" Opacity="0.75" Text="请先输入 Token 和 Datastream。" />
+                                <Button Text="上传当前心率" Clicked="OnSendHeartRateToBlynkClicked" HorizontalOptions="Fill" />
+                                <Editor x:Name="BlynkUploadResponseEditor" HeightRequest="120" IsReadOnly="True" AutoSize="TextChanges" Placeholder="上传响应显示在此" />
+                            </VerticalStackLayout>
+                        </Border>
 
-                    <HorizontalStackLayout Spacing="12">
-                        <Button
-                            Text="上传当前心率"
-                            Clicked="OnSendHeartRateToBlynkClicked"
-                            HorizontalOptions="FillAndExpand" />
-                        <Button
-                            Text="读取 Datastream"
-                            Clicked="OnGetBlynkValueClicked"
-                            HorizontalOptions="FillAndExpand" />
-                    </HorizontalStackLayout>
-
-                    <Editor
-                        x:Name="BlynkResponseEditor"
-                        HeightRequest="120"
-                        IsReadOnly="True"
-                        AutoSize="TextChanges"
-                        Placeholder="这里会显示 Blynk Cloud 返回结果。" />
+                        <!-- Get column -->
+                        <Border Padding="12" Stroke="#E5E7EB" StrokeThickness="1" Grid.Column="1">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="读取（获取）" FontAttributes="Bold" />
+                                <Label x:Name="BlynkGetUrlLabel" FontSize="12" LineBreakMode="WordWrap" Opacity="0.75" Text="请先输入 Token 和 Datastream。" />
+                                <Button Text="读取 Datastream" Clicked="OnGetBlynkValueClicked" HorizontalOptions="Fill" />
+                                <Editor x:Name="BlynkGetResponseEditor" HeightRequest="120" IsReadOnly="True" AutoSize="TextChanges" Placeholder="读取响应显示在此" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
 

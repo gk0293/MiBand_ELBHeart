@@ -38,7 +38,8 @@ public partial class MainPage : ContentPage
     private Entry BlynkDatastreamInput => this.FindByName<Entry>("BlynkDatastreamEntry")!;
     private Label BlynkUpdateUrlView => this.FindByName<Label>("BlynkUpdateUrlLabel")!;
     private Label BlynkGetUrlView => this.FindByName<Label>("BlynkGetUrlLabel")!;
-    private Editor BlynkResponseView => this.FindByName<Editor>("BlynkResponseEditor")!;
+    private Editor BlynkUploadResponseView => this.FindByName<Editor>("BlynkUploadResponseEditor")!;
+    private Editor BlynkGetResponseView => this.FindByName<Editor>("BlynkGetResponseEditor")!;
     private ActivityIndicator ScanBusyIndicator => this.FindByName<ActivityIndicator>("ScanningIndicator")!;
 
     public MainPage()
@@ -251,7 +252,7 @@ public partial class MainPage : ContentPage
                     if (TryBuildBlynkUrls(out var updateUrl, out _, out _))
                     {
                         var requestUrl = $"{updateUrl}{Uri.EscapeDataString(heartRate.ToString())}";
-                        await ExecuteBlynkRequestAsync(requestUrl, "上传成功", "上传失败");
+                        await ExecuteBlynkRequestAsync(requestUrl, "上传成功", "上传失败", BlynkUploadResponseView);
                         _lastBlynkSend = DateTime.UtcNow;
                     }
                 }
@@ -409,7 +410,7 @@ public partial class MainPage : ContentPage
         if (!TryBuildBlynkUrls(out var updateUrl, out _, out var errorMessage))
         {
             UpdateBlynkState("未配置", "#DC2626");
-            BlynkResponseView.Text = errorMessage;
+            BlynkUploadResponseView.Text = errorMessage;
             await DisplayAlert("Blynk Cloud", errorMessage, "确定");
             return;
         }
@@ -418,13 +419,13 @@ public partial class MainPage : ContentPage
         {
             const string noHeartRateMessage = "当前还未获取到有效心率，无法上传。";
             UpdateBlynkState("上传失败", "#DC2626");
-            BlynkResponseView.Text = noHeartRateMessage;
+            BlynkUploadResponseView.Text = noHeartRateMessage;
             await DisplayAlert("Blynk Cloud", noHeartRateMessage, "确定");
             return;
         }
 
         var requestUrl = $"{updateUrl}{Uri.EscapeDataString(_currentHeartRate.ToString())}";
-        await ExecuteBlynkRequestAsync(requestUrl, "上传成功", "上传失败");
+        await ExecuteBlynkRequestAsync(requestUrl, "上传成功", "上传失败", BlynkUploadResponseView);
     }
 
     private async void OnGetBlynkValueClicked(object sender, EventArgs e)
@@ -432,12 +433,12 @@ public partial class MainPage : ContentPage
         if (!TryBuildBlynkUrls(out _, out var getUrl, out var errorMessage))
         {
             UpdateBlynkState("未配置", "#DC2626");
-            BlynkResponseView.Text = errorMessage;
+            BlynkGetResponseView.Text = errorMessage;
             await DisplayAlert("Blynk Cloud", errorMessage, "确定");
             return;
         }
 
-        await ExecuteBlynkRequestAsync(getUrl, "获取成功", "获取失败");
+        await ExecuteBlynkRequestAsync(getUrl, "获取成功", "获取失败", BlynkGetResponseView);
     }
 
     private void ApplyStatusMessage(string message)
@@ -543,7 +544,7 @@ public partial class MainPage : ContentPage
         return true;
     }
 
-    private async Task ExecuteBlynkRequestAsync(string requestUrl, string successText, string failureText)
+    private async Task ExecuteBlynkRequestAsync(string requestUrl, string successText, string failureText, Editor targetEditor)
     {
         try
         {
@@ -551,12 +552,12 @@ public partial class MainPage : ContentPage
             var content = await response.Content.ReadAsStringAsync();
             var resultText = string.IsNullOrWhiteSpace(content) ? $"HTTP {(int)response.StatusCode}" : content;
 
-            BlynkResponseView.Text = $"[{DateTime.Now:HH:mm:ss}] {resultText}";
+            targetEditor.Text = $"[{DateTime.Now:HH:mm:ss}] {resultText}";
             UpdateBlynkState(response.IsSuccessStatusCode ? successText : failureText, response.IsSuccessStatusCode ? "#16A34A" : "#DC2626");
         }
         catch (Exception ex)
         {
-            BlynkResponseView.Text = $"[{DateTime.Now:HH:mm:ss}] {ex.Message}";
+            targetEditor.Text = $"[{DateTime.Now:HH:mm:ss}] {ex.Message}";
             UpdateBlynkState(failureText, "#DC2626");
         }
     }
