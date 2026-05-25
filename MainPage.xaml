@@ -15,7 +15,7 @@
                     FontSize="32"
                     SemanticProperties.HeadingLevel="Level1" />
                 <Label
-                    Text="已支持自动重连、记住上次设备、后台持续监测与悬浮窗控制。"
+                    Text="已支持自动重连、记住上次设备、后台持续监测与 Blynk Cloud 同步。"
                     FontSize="15"
                     Opacity="0.75" />
             </VerticalStackLayout>
@@ -67,7 +67,7 @@
                         FontAttributes="Bold"
                         FontSize="18" />
 
-                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
                         <Label Text="蓝牙设备" Grid.Row="0" Grid.Column="0" />
                         <Label x:Name="BluetoothDeviceLabel" Text="未连接" Grid.Row="0" Grid.Column="1" TextColor="#DC2626" />
 
@@ -80,14 +80,11 @@
                         <Label Text="后台监测" Grid.Row="3" Grid.Column="0" />
                         <Label x:Name="BackgroundMonitoringLabel" Text="未运行" Grid.Row="3" Grid.Column="1" TextColor="#DC2626" />
 
-                        <Label Text="悬浮窗" Grid.Row="4" Grid.Column="0" />
-                        <Label x:Name="OverlayStatusLabel" Text="未开启" Grid.Row="4" Grid.Column="1" TextColor="#DC2626" />
+                        <Label Text="Blynk Cloud" Grid.Row="4" Grid.Column="0" />
+                        <Label x:Name="BlynkStatusLabel" Text="未配置" Grid.Row="4" Grid.Column="1" TextColor="#6B7280" />
 
                         <Label Text="蓝牙权限" Grid.Row="5" Grid.Column="0" />
                         <Label x:Name="BluetoothPermissionLabel" Text="待检查" Grid.Row="5" Grid.Column="1" />
-
-                        <Label Text="悬浮权限" Grid.Row="6" Grid.Column="0" />
-                        <Label x:Name="OverlayPermissionLabel" Text="待检查" Grid.Row="6" Grid.Column="1" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
@@ -123,20 +120,72 @@
                     Clicked="OnDisconnectDeviceClicked"
                     HorizontalOptions="Fill"
                     IsEnabled="False" />
-
-                <Button
-                    x:Name="ShowOverlayButton"
-                    Text="开启悬浮窗"
-                    Clicked="OnShowOverlayClicked"
-                    HorizontalOptions="Fill" />
-
-                <Button
-                    x:Name="HideOverlayButton"
-                    Text="关闭悬浮窗"
-                    Clicked="OnHideOverlayClicked"
-                    HorizontalOptions="Fill"
-                    IsEnabled="False" />
             </VerticalStackLayout>
+
+            <Border
+                Padding="16"
+                Stroke="#E5E7EB"
+                StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="16" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="12">
+                    <Label
+                        Text="Blynk Cloud"
+                        FontAttributes="Bold"
+                        FontSize="18" />
+
+                    <Entry
+                        x:Name="BlynkTokenEntry"
+                        Placeholder="请输入 Blynk Token"
+                        TextChanged="OnBlynkConfigChanged"
+                        ClearButtonVisibility="WhileEditing" />
+
+                    <Entry
+                        x:Name="BlynkDatastreamEntry"
+                        Placeholder="请输入 Datastream，例如 V0"
+                        TextChanged="OnBlynkConfigChanged"
+                        ClearButtonVisibility="WhileEditing" />
+
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="上传链接" FontAttributes="Bold" FontSize="14" />
+                        <Label
+                            x:Name="BlynkUpdateUrlLabel"
+                            FontSize="12"
+                            LineBreakMode="WordWrap"
+                            Opacity="0.75"
+                            Text="请先输入 Token 和 Datastream。" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="获取链接" FontAttributes="Bold" FontSize="14" />
+                        <Label
+                            x:Name="BlynkGetUrlLabel"
+                            FontSize="12"
+                            LineBreakMode="WordWrap"
+                            Opacity="0.75"
+                            Text="请先输入 Token 和 Datastream。" />
+                    </VerticalStackLayout>
+
+                    <HorizontalStackLayout Spacing="12">
+                        <Button
+                            Text="上传当前心率"
+                            Clicked="OnSendHeartRateToBlynkClicked"
+                            HorizontalOptions="FillAndExpand" />
+                        <Button
+                            Text="读取 Datastream"
+                            Clicked="OnGetBlynkValueClicked"
+                            HorizontalOptions="FillAndExpand" />
+                    </HorizontalStackLayout>
+
+                    <Editor
+                        x:Name="BlynkResponseEditor"
+                        HeightRequest="120"
+                        IsReadOnly="True"
+                        AutoSize="TextChanges"
+                        Placeholder="这里会显示 Blynk Cloud 返回结果。" />
+                </VerticalStackLayout>
+            </Border>
 
             <Border
                 Padding="16"
@@ -250,7 +299,7 @@
                 <Label
                     FontSize="14"
                     Opacity="0.8"
-                    Text="提示：已接入蓝牙扫描、连接和标准心率特征读取。请先开启系统蓝牙，再扫描并连接心率设备。" />
+                    Text="提示：已接入蓝牙扫描、连接和标准心率特征读取，可按需将当前心率上传到 Blynk Cloud。请先开启系统蓝牙，再扫描并连接心率设备。" />
             </Border>
         </VerticalStackLayout>
     </ScrollView>

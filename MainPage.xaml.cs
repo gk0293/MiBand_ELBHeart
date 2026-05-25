@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Net.Http;
 using Heart.Collections;
 using Heart.Models;
 using Heart.Services;
@@ -9,13 +10,17 @@ namespace Heart;
 
 public partial class MainPage : ContentPage
 {
+    private static readonly HttpClient BlynkHttpClient = new();
     private readonly ObservableRangeCollection<BluetoothPeripheral> _devices = new();
     private IHeartRateMonitorService? _heartRateMonitorService;
     private BluetoothPeripheral? _selectedPeripheral;
-    private bool _overlayEnabled;
     private bool _eventsSubscribed;
     private bool _autoReconnectAttempted;
     private int _currentHeartRate;
+
+    // 字段（类内）
+    private DateTime _lastBlynkSend = DateTime.MinValue;
+    private int _blynkSendIntervalSeconds = 2; // 每 2 秒上传一次，可按需调整
 
     private CollectionView DevicesCollection => this.FindByName<CollectionView>("DevicesCollectionView")!;
     private Button ConnectButton => this.FindByName<Button>("ConnectDeviceButton")!;
@@ -26,8 +31,14 @@ public partial class MainPage : ContentPage
     private Label BluetoothPermissionStateLabel => this.FindByName<Label>("BluetoothPermissionLabel")!;
     private Label RememberedDeviceStateLabel => this.FindByName<Label>("RememberedDeviceLabel")!;
     private Label BackgroundMonitoringStateLabel => this.FindByName<Label>("BackgroundMonitoringLabel")!;
+    private Label BlynkStateLabel => this.FindByName<Label>("BlynkStatusLabel")!;
     private Label ScanHintStatusLabel => this.FindByName<Label>("ScanHintLabel")!;
     private Editor ScanLogView => this.FindByName<Editor>("ScanLogEditor")!;
+    private Entry BlynkTokenInput => this.FindByName<Entry>("BlynkTokenEntry")!;
+    private Entry BlynkDatastreamInput => this.FindByName<Entry>("BlynkDatastreamEntry")!;
+    private Label BlynkUpdateUrlView => this.FindByName<Label>("BlynkUpdateUrlLabel")!;
+    private Label BlynkGetUrlView => this.FindByName<Label>("BlynkGetUrlLabel")!;
+    private Editor BlynkResponseView => this.FindByName<Editor>("BlynkResponseEditor")!;
     private ActivityIndicator ScanBusyIndicator => this.FindByName<ActivityIndicator>("ScanningIndicator")!;
 
     public MainPage()
@@ -35,18 +46,18 @@ public partial class MainPage : ContentPage
         InitializeComponent();
         DevicesCollection.ItemsSource = _devices;
         UpdateHeartRate(0);
-        UpdateOverlayState(false);
         UpdateConnectionState(null);
         UpdateBluetoothPermissionLabel("待检查", "#6B7280");
         UpdateRememberedDeviceState(null);
         UpdateBackgroundMonitoringState("未运行", "#DC2626");
+        UpdateBlynkState("未配置", "#6B7280");
+        RefreshBlynkUrlPreview();
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
         EnsureServiceSubscriptions();
-        UpdateOverlayPermissionState();
         _ = InitializeAsync();
     }
 
@@ -200,13 +211,6 @@ public partial class MainPage : ContentPage
         _autoReconnectAttempted = true;
         SyncConnectedDeviceState();
         UpdateRememberedDeviceState(_heartRateMonitorService.RememberedDevice);
-
-        if (_overlayEnabled)
-        {
-#if ANDROID
-            Platforms.Android.Services.HeartOverlayService.Start(global::Android.App.Application.Context, BuildOverlayText());
-#endif
-        }
     }
 
     private async void OnDisconnectDeviceClicked(object sender, EventArgs e)
@@ -221,14 +225,6 @@ public partial class MainPage : ContentPage
         UpdateConnectionState(null);
         UpdateBackgroundMonitoringState("未运行", "#DC2626");
         UpdateRememberedDeviceState(_heartRateMonitorService.RememberedDevice);
-
-        if (_overlayEnabled)
-        {
-#if ANDROID
-            Platforms.Android.Services.HeartOverlayService.Stop(global::Android.App.Application.Context);
-#endif
-            UpdateOverlayState(false);
-        }
     }
 
     private void OnDeviceSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -239,18 +235,30 @@ public partial class MainPage : ContentPage
 
     private void OnHeartRateUpdated(object? sender, int heartRate)
     {
-        MainThread.BeginInvokeOnMainThread(() =>
+        MainThread.BeginInvokeOnMainThread(async () =>
         {
             UpdateHeartRate(heartRate);
             ConnectionStateLabel.Text = "已连接，正在接收心率数据";
             ConnectionStateLabel.TextColor = Color.FromArgb("#16A34A");
             UpdateBackgroundMonitoringState("监测中", "#16A34A");
 
-            if (_overlayEnabled)
+            // 自动上传（限频）
+            try
             {
-#if ANDROID
-                Platforms.Android.Services.HeartOverlayService.Start(global::Android.App.Application.Context, BuildOverlayText());
-#endif
+                if (_blynkSendIntervalSeconds <= 0 ||
+                    (DateTime.UtcNow - _lastBlynkSend).TotalSeconds >= _blynkSendIntervalSeconds)
+                {
+                    if (TryBuildBlynkUrls(out var updateUrl, out _, out _))
+                    {
+                        var requestUrl = $"{updateUrl}{Uri.EscapeDataString(heartRate.ToString())}";
+                        await ExecuteBlynkRequestAsync(requestUrl, "上传成功", "上传失败");
+                        _lastBlynkSend = DateTime.UtcNow;
+                    }
+                }
+            }
+            catch
+            {
+                // 可在此记录异常或忽略以避免影响 UI
             }
         });
     }
@@ -391,6 +399,47 @@ public partial class MainPage : ContentPage
         RememberedReconnectButton.IsEnabled = peripheral is not null && !(_heartRateMonitorService?.IsConnected ?? false);
     }
 
+    private void OnBlynkConfigChanged(object sender, TextChangedEventArgs e)
+    {
+        RefreshBlynkUrlPreview();
+    }
+
+    private async void OnSendHeartRateToBlynkClicked(object sender, EventArgs e)
+    {
+        if (!TryBuildBlynkUrls(out var updateUrl, out _, out var errorMessage))
+        {
+            UpdateBlynkState("未配置", "#DC2626");
+            BlynkResponseView.Text = errorMessage;
+            await DisplayAlert("Blynk Cloud", errorMessage, "确定");
+            return;
+        }
+
+        if (_currentHeartRate <= 0)
+        {
+            const string noHeartRateMessage = "当前还未获取到有效心率，无法上传。";
+            UpdateBlynkState("上传失败", "#DC2626");
+            BlynkResponseView.Text = noHeartRateMessage;
+            await DisplayAlert("Blynk Cloud", noHeartRateMessage, "确定");
+            return;
+        }
+
+        var requestUrl = $"{updateUrl}{Uri.EscapeDataString(_currentHeartRate.ToString())}";
+        await ExecuteBlynkRequestAsync(requestUrl, "上传成功", "上传失败");
+    }
+
+    private async void OnGetBlynkValueClicked(object sender, EventArgs e)
+    {
+        if (!TryBuildBlynkUrls(out _, out var getUrl, out var errorMessage))
+        {
+            UpdateBlynkState("未配置", "#DC2626");
+            BlynkResponseView.Text = errorMessage;
+            await DisplayAlert("Blynk Cloud", errorMessage, "确定");
+            return;
+        }
+
+        await ExecuteBlynkRequestAsync(getUrl, "获取成功", "获取失败");
+    }
+
     private void ApplyStatusMessage(string message)
     {
         var isSuccess = message.Contains("已连接", StringComparison.OrdinalIgnoreCase) || message.Contains("完成", StringComparison.OrdinalIgnoreCase);
@@ -427,15 +476,6 @@ public partial class MainPage : ContentPage
         RefreshDeviceSelectionState(_heartRateMonitorService?.ConnectedDevice);
     }
 
-    private void UpdateOverlayState(bool isEnabled)
-    {
-        _overlayEnabled = isEnabled;
-        OverlayStatusLabel.Text = isEnabled ? "已开启" : "未开启";
-        OverlayStatusLabel.TextColor = isEnabled ? Color.FromArgb("#16A34A") : Color.FromArgb("#DC2626");
-        ShowOverlayButton.IsEnabled = !isEnabled;
-        HideOverlayButton.IsEnabled = isEnabled;
-    }
-
     private void UpdateBackgroundMonitoringState(string text, string color)
     {
         BackgroundMonitoringStateLabel.Text = text;
@@ -446,6 +486,79 @@ public partial class MainPage : ContentPage
     {
         BluetoothPermissionStateLabel.Text = text;
         BluetoothPermissionStateLabel.TextColor = Color.FromArgb(color);
+    }
+
+    private void UpdateBlynkState(string text, string color)
+    {
+        BlynkStateLabel.Text = text;
+        BlynkStateLabel.TextColor = Color.FromArgb(color);
+    }
+
+    private void RefreshBlynkUrlPreview()
+    {
+        if (TryBuildBlynkUrls(out var updateUrl, out var getUrl, out _))
+        {
+            BlynkUpdateUrlView.Text = $"{updateUrl}<数据>";
+            BlynkGetUrlView.Text = getUrl;
+            if (string.Equals(BlynkStateLabel.Text, "未配置", StringComparison.Ordinal))
+            {
+                UpdateBlynkState("已就绪", "#2563EB");
+            }
+
+            return;
+        }
+
+        BlynkUpdateUrlView.Text = "请先输入 Token 和 Datastream。";
+        BlynkGetUrlView.Text = "请先输入 Token 和 Datastream。";
+        UpdateBlynkState("未配置", "#6B7280");
+    }
+
+    private bool TryBuildBlynkUrls(out string updateUrl, out string getUrl, out string errorMessage)
+    {
+        var token = BlynkTokenInput.Text?.Trim();
+        var datastream = BlynkDatastreamInput.Text?.Trim();
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            updateUrl = string.Empty;
+            getUrl = string.Empty;
+            errorMessage = "请输入 Blynk Token。";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(datastream))
+        {
+            updateUrl = string.Empty;
+            getUrl = string.Empty;
+            errorMessage = "请输入 Datastream 位置，例如 V0。";
+            return false;
+        }
+
+        var escapedToken = Uri.EscapeDataString(token);
+        var escapedDatastream = Uri.EscapeDataString(datastream);
+
+        updateUrl = $"https://blynk.cloud/external/api/update?token={escapedToken}&{escapedDatastream}=";
+        getUrl = $"https://blynk.cloud/external/api/get?token={escapedToken}&{escapedDatastream}";
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private async Task ExecuteBlynkRequestAsync(string requestUrl, string successText, string failureText)
+    {
+        try
+        {
+            var response = await BlynkHttpClient.GetAsync(requestUrl);
+            var content = await response.Content.ReadAsStringAsync();
+            var resultText = string.IsNullOrWhiteSpace(content) ? $"HTTP {(int)response.StatusCode}" : content;
+
+            BlynkResponseView.Text = $"[{DateTime.Now:HH:mm:ss}] {resultText}";
+            UpdateBlynkState(response.IsSuccessStatusCode ? successText : failureText, response.IsSuccessStatusCode ? "#16A34A" : "#DC2626");
+        }
+        catch (Exception ex)
+        {
+            BlynkResponseView.Text = $"[{DateTime.Now:HH:mm:ss}] {ex.Message}";
+            UpdateBlynkState(failureText, "#DC2626");
+        }
     }
 
     private void SetScanningState(bool isScanning, string hint)
@@ -477,53 +590,6 @@ public partial class MainPage : ContentPage
 #else
         UpdateBluetoothPermissionLabel("仅 Android", "#6B7280");
 #endif
-    }
-
-    private void UpdateOverlayPermissionState()
-    {
-#if ANDROID
-        var allowed = global::Android.OS.Build.VERSION.SdkInt < global::Android.OS.BuildVersionCodes.M
-            || global::Android.Provider.Settings.CanDrawOverlays(global::Android.App.Application.Context);
-        OverlayPermissionLabel.Text = allowed ? "已授权" : "未授权";
-        OverlayPermissionLabel.TextColor = allowed ? Color.FromArgb("#16A34A") : Color.FromArgb("#DC2626");
-#else
-        OverlayPermissionLabel.Text = "仅 Android";
-        OverlayPermissionLabel.TextColor = Color.FromArgb("#6B7280");
-#endif
-    }
-
-    private string BuildOverlayText() => _currentHeartRate > 0 ? $"Heart rate: {_currentHeartRate} bpm" : "Heart rate: -- bpm";
-
-    private async void OnShowOverlayClicked(object sender, EventArgs e)
-    {
-#if ANDROID
-        var notificationGranted = await EnsureNotificationPermissionAsync();
-        if (!notificationGranted)
-        {
-            await DisplayAlert("权限未开启", "需要通知权限才能显示前台服务通知。", "确定");
-            return;
-        }
-
-        var canDrawOverlays = await EnsureOverlayPermissionAsync();
-        if (!canDrawOverlays)
-        {
-            UpdateOverlayPermissionState();
-            return;
-        }
-
-        Platforms.Android.Services.HeartOverlayService.Start(global::Android.App.Application.Context, BuildOverlayText());
-        UpdateOverlayState(true);
-#else
-        await DisplayAlert("暂不支持", "悬浮窗当前仅支持 Android。", "确定");
-#endif
-    }
-
-    private void OnHideOverlayClicked(object sender, EventArgs e)
-    {
-#if ANDROID
-        Platforms.Android.Services.HeartOverlayService.Stop(global::Android.App.Application.Context);
-#endif
-        UpdateOverlayState(false);
     }
 
 #if ANDROID
@@ -574,36 +640,6 @@ public partial class MainPage : ContentPage
         return locationStatus == PermissionStatus.Granted;
     }
 
-    private static async Task<bool> EnsureNotificationPermissionAsync()
-    {
-        var status = await Permissions.CheckStatusAsync<Permissions.PostNotifications>();
-        if (status == PermissionStatus.Granted)
-        {
-            return true;
-        }
-
-        status = await Permissions.RequestAsync<Permissions.PostNotifications>();
-        return status == PermissionStatus.Granted;
-    }
-
-    private async Task<bool> EnsureOverlayPermissionAsync()
-    {
-        var context = global::Android.App.Application.Context;
-        if (global::Android.OS.Build.VERSION.SdkInt < global::Android.OS.BuildVersionCodes.M
-            || global::Android.Provider.Settings.CanDrawOverlays(context))
-        {
-            return true;
-        }
-
-        await DisplayAlert("需要悬浮窗权限", "请在接下来的系统页面中允许“显示在其他应用的上层”，然后返回应用重新点击开启。", "知道了");
-
-        var intent = new global::Android.Content.Intent(
-            global::Android.Provider.Settings.ActionManageOverlayPermission,
-            global::Android.Net.Uri.Parse($"package:{context.PackageName}"));
-        intent.AddFlags(global::Android.Content.ActivityFlags.NewTask);
-        context.StartActivity(intent);
-        return false;
-    }
 #else
     private Task<bool> EnsureBluetoothPermissionsAsync()
     {
